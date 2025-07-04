@@ -1,0 +1,39 @@
+{
+  "name": "whatsapp_calander",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node combined-service.js",
+    "dev": "node combined-service.js",
+    "auth": "ts-node src/index.ts auth",
+    "run": "ts-node src/index.ts run",
+    "schedule": "ts-node src/index.ts schedule",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.56.0",
+    "@types/dotenv": "^6.1.1",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.10",
+    "@types/node-cron": "^3.0.11",
+    "@types/sqlite3": "^3.1.11",
+    "axios": "^1.10.0",
+    "date-fns": "^4.1.0",
+    "dotenv": "^17.0.1",
+    "ejs": "^3.1.9",
+    "express": "^5.1.0",
+    "googleapis": "^150.0.1",
+    "node-cron": "^4.2.0",
+    "qrcode": "^1.5.3",
+    "sqlite3": "^5.1.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3",
+    "uuid": "^10.0.0"
+  }
+}

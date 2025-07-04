@@ -1,0 +1,19 @@
+services:
+  whatsapp-calendar-audit:
+    build: .
+    container_name: whatsapp-calendar-audit
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - GREEN_API_ID_INSTANCE=${GREEN_API_ID_INSTANCE}
+      - GREEN_API_TOKEN_INSTANCE=${GREEN_API_TOKEN_INSTANCE}
+      - GREEN_API_BASE_URL=${GREEN_API_BASE_URL}
+      - WHATSAPP_PHONE_NUMBER=${WHATSAPP_PHONE_NUMBER}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - INCLUDE_GROUP_CHATS=${INCLUDE_GROUP_CHATS}
+      - NODE_ENV=production
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
