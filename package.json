@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node combined-service.js",
-    "dev": "node combined-service.js",
+    "start": "node daily-audit-service.js",
+    "dev": "node daily-audit-service.js",
     "auth": "ts-node src/index.ts auth",
     "run": "ts-node src/index.ts run",
     "schedule": "ts-node src/index.ts schedule",
