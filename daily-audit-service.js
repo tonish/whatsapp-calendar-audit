@@ -15,10 +15,10 @@ app.use(express.urlencoded({ extended: true }));
 const recentMessages = new Map();
 const userConfigs = new Map();
 
-// Master Google OAuth2 client - Use Desktop client for better compatibility
+// Master Google OAuth2 client - Use Web client for OAuth flow
 const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_DESKTOP_CLIENT_ID,
-  process.env.GOOGLE_DESKTOP_CLIENT_SECRET,
+  process.env.GOOGLE_WEB_CLIENT_ID,
+  process.env.GOOGLE_WEB_CLIENT_SECRET,
   process.env.GOOGLE_REDIRECT_URI
 );
 
@@ -588,18 +588,38 @@ app.post('/setup/whatsapp/:userId', async (req, res) => {
 app.get('/auth/google/:userId', async (req, res) => {
   const { userId } = req.params;
   
+  console.log(`🔍 OAUTH REQUEST: userId=${userId}`);
+  
   // Use Desktop OAuth client (no redirect URI needed)
   const manualOAuth = new google.auth.OAuth2(
     process.env.GOOGLE_DESKTOP_CLIENT_ID,
-    process.env.GOOGLE_DESKTOP_CLIENT_SECRET
+    process.env.GOOGLE_DESKTOP_CLIENT_SECRET,
+    'urn:ietf:wg:oauth:2.0:oob'
   );
   
   const scopes = ['https://www.googleapis.com/auth/calendar.readonly'];
-  const authUrl = manualOAuth.generateAuthUrl({
+  const authParams = {
     access_type: 'offline',
     scope: scopes,
-    state: userId
+    state: userId,
+    redirect_uri: 'urn:ietf:wg:oauth:2.0:oob'
+  };
+  
+  console.log('🔍 DEBUG: Environment variables:', {
+    DESKTOP_CLIENT_ID: process.env.GOOGLE_DESKTOP_CLIENT_ID,
+    WEB_CLIENT_ID: process.env.GOOGLE_WEB_CLIENT_ID,
+    DESKTOP_SECRET: process.env.GOOGLE_DESKTOP_CLIENT_SECRET ? 'SET' : 'MISSING'
   });
+  
+  console.log('🔍 DEBUG: OAuth client config:', {
+    clientId: process.env.GOOGLE_DESKTOP_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_DESKTOP_CLIENT_SECRET ? 'SET' : 'MISSING',
+    redirectUri: 'urn:ietf:wg:oauth:2.0:oob'
+  });
+  
+  console.log('🔍 DEBUG: Auth params:', authParams);
+  const authUrl = manualOAuth.generateAuthUrl(authParams);
+  console.log('🔍 DEBUG: Generated OAuth URL:', authUrl);
 
   res.send(`
     <div style="font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;">
@@ -694,11 +714,25 @@ app.post('/auth/google/manual/:userId', async (req, res) => {
   try {
     console.log(`🔐 Processing manual Google OAuth for user: ${userId}`);
     
-    // Use Desktop OAuth client for manual flow (no redirect URI)
+    // Use Desktop OAuth client for manual flow with explicit redirect URI
     const manualOAuth = new google.auth.OAuth2(
       process.env.GOOGLE_DESKTOP_CLIENT_ID,
-      process.env.GOOGLE_DESKTOP_CLIENT_SECRET
+      process.env.GOOGLE_DESKTOP_CLIENT_SECRET,
+      'urn:ietf:wg:oauth:2.0:oob'
     );
+    
+    // Verify client configuration
+    console.log('🔍 Manual OAuth client details:', {
+      clientId: manualOAuth._clientId,
+      redirectUri: manualOAuth.redirectUri
+    });
+    
+    console.log(`🔍 DEBUG: Getting token for code: ${code.substring(0, 10)}...`);
+    console.log(`🔍 DEBUG: Token request params:`, {
+      code: code.substring(0, 10) + '...',
+      redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+      client_id: process.env.GOOGLE_DESKTOP_CLIENT_ID
+    });
     
     const { tokens } = await manualOAuth.getToken(code);
     console.log('✅ Tokens received from Google');
@@ -719,8 +753,18 @@ app.post('/auth/google/manual/:userId', async (req, res) => {
 
     res.send(completePage(userData));
   } catch (error) {
-    console.error('Manual OAuth error:', error);
-    res.send(`<h1>❌ Calendar Connection Failed</h1><p>${error.message}</p><br><a href="/auth/google/${userId}">Try Again</a>`);
+    console.error('❌ Manual OAuth error details:', {
+      message: error.message,
+      status: error.status || error.code,
+      response: error.response?.data || 'No response data'
+    });
+    
+    let errorMsg = error.message;
+    if (error.response?.data?.error_description) {
+      errorMsg = error.response.data.error_description;
+    }
+    
+    res.send(`<h1>❌ Calendar Connection Failed</h1><p><strong>Error:</strong> ${errorMsg}</p><p><strong>Details:</strong> ${error.message}</p><br><a href="/auth/google/${userId}">Try Again</a>`);
   }
 });
 
@@ -820,6 +864,41 @@ app.get('/debug/users', async (req, res) => {
   }
 });
 
+// Debug: Test token directly
+app.get('/debug/token/:code', async (req, res) => {
+  const { code } = req.params;
+  
+  try {
+    const testOAuth = new google.auth.OAuth2(
+      process.env.GOOGLE_DESKTOP_CLIENT_ID,
+      process.env.GOOGLE_DESKTOP_CLIENT_SECRET,
+      'urn:ietf:wg:oauth:2.0:oob'
+    );
+    
+    console.log('🧪 Testing token:', code.substring(0, 10) + '...');
+    const { tokens } = await testOAuth.getToken(code);
+    
+    res.json({ success: true, tokens: { access_token: 'REDACTED', ...tokens } });
+  } catch (error) {
+    res.json({ 
+      success: false, 
+      error: error.message,
+      details: error.response?.data || 'No details'
+    });
+  }
+});
+
+// Debug: Check environment variables
+app.get('/debug/env', (req, res) => {
+  res.json({
+    GOOGLE_WEB_CLIENT_ID: process.env.GOOGLE_WEB_CLIENT_ID,
+    GOOGLE_DESKTOP_CLIENT_ID: process.env.GOOGLE_DESKTOP_CLIENT_ID,
+    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI,
+    WEB_SECRET: process.env.GOOGLE_WEB_CLIENT_SECRET ? 'SET' : 'MISSING',
+    DESKTOP_SECRET: process.env.GOOGLE_DESKTOP_CLIENT_SECRET ? 'SET' : 'MISSING'
+  });
+});
+
 // Debug: Test OAuth URL generation
 app.get('/debug/oauth/:userId', (req, res) => {
   const { userId } = req.params;
@@ -829,7 +908,8 @@ app.get('/debug/oauth/:userId', (req, res) => {
     access_type: 'offline',
     scope: scopes,
     state: userId,
-    prompt: 'select_account'
+    prompt: 'select_account',
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI
   });
   
   res.json({
