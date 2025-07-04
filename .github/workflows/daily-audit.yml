@@ -1,0 +1,35 @@
+name: Daily WhatsApp Calendar Audit
+
+on:
+  schedule:
+    # Run at 9:30 PM Israel time (18:30 UTC in winter, 19:30 UTC in summer)
+    - cron: '30 19 * * *'  # Adjust for daylight saving
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Create data directories
+      run: mkdir -p data/users config logs
+      
+    - name: Restore user data
+      run: |
+        echo '${{ secrets.SHAHAR_USER_DATA }}' > data/users/1d7c2a42-ae77-4f4c-969d-f43bde9408d9.json
+        echo '${{ secrets.YONIT_USER_DATA }}' > data/users/a4139531-7b4b-42fd-9301-dd2cb9caaf88.json
+        
+    - name: Run daily audit
+      run: node run-audit.js
