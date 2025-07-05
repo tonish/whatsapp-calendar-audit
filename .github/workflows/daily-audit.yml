@@ -2,8 +2,8 @@ name: Daily WhatsApp Calendar Audit
 
 on:
   schedule:
-    # Run at 9:30 PM Israel time (18:30 UTC in winter, 19:30 UTC in summer)
-    - cron: '30 19 * * *'  # Adjust for daylight saving
+    # Run at 9:30 PM Israel time (18:30 UTC) 
+    - cron: '30 18 * * *'  # 21:30 Israel time (UTC+3 in summer)
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
