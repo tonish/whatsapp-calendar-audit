@@ -28,8 +28,14 @@ jobs:
       
     - name: Restore user data
       run: |
-        echo '${{ secrets.SHAHAR_USER_DATA }}' > data/users/1d7c2a42-ae77-4f4c-969d-f43bde9408d9.json
-        echo '${{ secrets.YONIT_USER_DATA }}' > data/users/a4139531-7b4b-42fd-9301-dd2cb9caaf88.json
+        # Method 1: Direct JSON (cleaned)
+        echo '${{ secrets.SHAHAR_USER_DATA }}' | tr -d '\n\r' > data/users/1d7c2a42-ae77-4f4c-969d-f43bde9408d9.json
+        echo '${{ secrets.YONIT_USER_DATA }}' | tr -d '\n\r' > data/users/a4139531-7b4b-42fd-9301-dd2cb9caaf88.json
+        
+        # Debug: Show file contents
+        echo "📄 Shahar file size: $(wc -c < data/users/1d7c2a42-ae77-4f4c-969d-f43bde9408d9.json)"
+        echo "📄 Yonit file size: $(wc -c < data/users/a4139531-7b4b-42fd-9301-dd2cb9caaf88.json)"
+        echo "📄 Shahar preview: $(head -c 100 data/users/1d7c2a42-ae77-4f4c-969d-f43bde9408d9.json)"
         
     - name: Run daily audit
       run: node run-audit.js

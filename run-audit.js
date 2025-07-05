@@ -21,13 +21,37 @@ async function runStandaloneAudit() {
     for (const file of userFiles) {
       if (!file.endsWith('.json')) continue;
       
-      const userData = JSON.parse(await fs.readFile(path.join(usersDir, file), 'utf8'));
-      if (userData.status !== 'fully_configured') continue;
-      
-      console.log(`\n👤 Processing: ${userData.name}`);
-      
-      // Run audit for this user
-      await auditUser(userData);
+      try {
+        const fileContent = await fs.readFile(path.join(usersDir, file), 'utf8');
+        console.log(`📄 Reading file: ${file}`);
+        console.log(`📝 File content length: ${fileContent.length}`);
+        console.log(`📝 First 100 chars: ${fileContent.substring(0, 100)}...`);
+        
+        // Clean the JSON content
+        const cleanedContent = fileContent
+          .replace(/\r\n/g, ' ')
+          .replace(/\n/g, ' ')
+          .replace(/\r/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        console.log(`🧹 Cleaned content length: ${cleanedContent.length}`);
+        
+        const userData = JSON.parse(cleanedContent);
+        if (userData.status !== 'fully_configured') {
+          console.log(`⚠️ User ${userData.name || 'Unknown'} not fully configured, skipping`);
+          continue;
+        }
+        
+        console.log(`\n👤 Processing: ${userData.name}`);
+        
+        // Run audit for this user
+        await auditUser(userData);
+      } catch (parseError) {
+        console.error(`❌ Error parsing ${file}:`, parseError.message);
+        console.error(`📄 File content preview:`, fileContent?.substring(0, 200));
+        continue;
+      }
     }
     
     console.log('\n✅ GitHub Actions audit completed successfully');
