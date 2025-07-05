@@ -6,9 +6,19 @@ class KeywordDetector {
       'מינוי', 'תור', 'זמן', 'מחר', 'היום',
       'שעה', 'בוקר', 'צהריים', 'אחר הצהריים', 'ערב',
       'ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת',
-      'ביום', 'תאריך', 'מועד', 'נקבע', 'קובעים',
+      'ביום', 'תאריך', 'מועד', 'נקבע', 'קובעים', 'לקבוע', 'לתאם', 'לזמן',
       'טיפול', 'אוסתאופתיה', 'אוסתאופטיה', 'כאב', 'גב',
-      'רופא', 'דוקטור', 'קליניקה', 'בדיקה'
+      'רופא', 'דוקטור', 'קליניקה', 'בדיקה', 'תור',
+      // Hebrew confirmations and casual scheduling words
+      'בסדר', 'מוכן', 'מוכנה', 'טוב', 'נהדר', 'מושלם', 'אוקיי', 
+      'מסכים', 'מסכימה', 'נפלא', 'יופי', 'סבבה', 'תמים',
+      // Hebrew scheduling and meeting words
+      'נפגשים', 'נפגש', 'נפגשת', 'ניפגש', 'להיפגש', 'נפגישה',
+      'אנחנו', 'יהיה', 'יכול', 'יכולה', 'נוכל', 'בואו', 'תן', 'תני',
+      'מתאים', 'מתאימה', 'נוח', 'נוחה', 'אפשר', 'אפשרי',
+      // Hebrew time/location indicators  
+      'אצל', 'בבית', 'במשרד', 'בקליניקה', 'שם', 'פה', 'כאן',
+      'ב-', 'את', 'של', 'עם', 'אחרי', 'לפני', 'במקום'
     ];
 
     this.englishKeywords = [
@@ -16,7 +26,15 @@ class KeywordDetector {
       'today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
       'morning', 'afternoon', 'evening', 'night', 'am', 'pm',
       'time', 'date', 'when', 'at', 'on', 'call', 'visit',
-      'doctor', 'clinic', 'checkup', 'treatment'
+      'doctor', 'clinic', 'checkup', 'treatment', 'therapy', 'osteopath',
+      // Casual confirmation words for LLM analysis
+      'set', 'confirmed', 'good', 'sounds', 'okay', 'ok', 'ready', 'fine', 'perfect', 'great',
+      'awesome', 'cool', 'works', 'done', 'agreed', 'yes', 'yep', 'sure', 'absolutely',
+      // Common scheduling words
+      'we', 'were', 'are', 'lets', "let's", 'can', 'will', 'shall', 'could', 'should',
+      'see', 'meet', 'there', 'here', 'place', 'location', 'where', 'when',
+      // Mixed language triggers (common in Israeli WhatsApp)
+      'then', 'so', 'but', 'and', 'the', 'for', 'with', 'at', 'in', 'on'
     ];
 
     this.datePatterns = [
@@ -89,8 +107,8 @@ class KeywordDetector {
       detectedNames.length
     );
 
-    // Lower threshold for more inclusive detection
-    if (confidence < 0.2) {
+    // Very low threshold for LLM analysis - let Claude decide
+    if (confidence < 0.1) {
       return null;
     }
 

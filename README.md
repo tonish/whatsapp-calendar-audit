@@ -18,14 +18,26 @@
 ## 🎯 How It Works
 
 ### Smart Detection Logic
-- ✅ Detects meeting keywords in Hebrew/English
-- ✅ Checks against Google Calendar for conflicts
+- ✅ **AI-Powered Analysis**: Claude LLM understands conversation context
+- ✅ **Casual Message Detection**: Recognizes "ok were set for tomorrow" type confirmations
+- ✅ **Hebrew/English Keywords**: Comprehensive meeting vocabulary
+- ✅ **Context-Aware**: Analyzes conversation history for complete meeting details
+- ✅ **Smart Calendar Queries**: Only checks relevant dates mentioned in messages
 - ✅ Only notifies for ACTUAL issues:
   - Schedule conflicts with existing events
   - Missing meetings that should be on calendar
 - ❌ No notifications for meetings already properly scheduled
 
 ### Example Scenarios
+
+**🤖 AI Context Understanding**
+```
+Message 1: "Can we meet tomorrow?"
+Message 2: "How about 3 PM?"
+Message 3: "ok were set for tomorrow"
+AI Analysis: Extracts "Tomorrow 3 PM meeting" from conversation
+→ Calendar checked for conflicts
+```
 
 **🚨 Conflict Detection**
 ```
@@ -255,11 +267,14 @@ MIT License - see LICENSE file for details.
 
 ## 🌟 Features Roadmap
 
+- [x] **AI-powered meeting extraction** ✅ (Claude LLM integration)
+- [x] **Context-aware conversation analysis** ✅
+- [x] **Casual confirmation detection** ✅ (e.g., "ok were set")
+- [x] **Smart calendar querying** ✅ (only relevant dates)
 - [ ] Web dashboard for managing all users
 - [ ] Advanced calendar conflict resolution
 - [ ] Integration with more calendar providers
 - [ ] Mobile app for easier setup
-- [ ] AI-powered meeting extraction
 - [ ] Slack/Teams integration
 
 ---

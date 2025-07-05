@@ -9,6 +9,7 @@ const path = require('path');
 const { google } = require('googleapis');
 const axios = require('axios');
 const { KeywordDetector } = require('./keyword-detector');
+const { LLMAnalyzer } = require('./llm-analyzer');
 
 async function runStandaloneAudit() {
   console.log('🚀 Starting GitHub Actions Audit');
@@ -81,10 +82,17 @@ async function auditUser(userData) {
     const messages = await getRecentMessages(userData);
     console.log(`📱 Retrieved ${messages.length} messages from last 24 hours`);
     
-    // Initialize keyword detector
+    // Initialize keyword detector and LLM analyzer
     const detector = new KeywordDetector();
-    const detectedMeetings = detector.detectMeetings(messages);
-    console.log(`🎯 Detected ${detectedMeetings.length} potential meetings`);
+    const llmAnalyzer = new LLMAnalyzer();
+    
+    // Detect meetings with keyword analysis
+    const keywordDetections = detector.detectMeetings(messages);
+    console.log(`🎯 Keyword detector found ${keywordDetections.length} potential meetings`);
+    
+    // Enhance with LLM analysis for better accuracy
+    const detectedMeetings = await enhanceWithLLMAnalysis(keywordDetections, messages, llmAnalyzer);
+    console.log(`🤖 After LLM analysis: ${detectedMeetings.length} confirmed meetings`);
     
     // Get calendar events for detected meeting dates
     const relevantEvents = await getRelevantCalendarEvents(userData, detectedMeetings);
@@ -112,10 +120,119 @@ async function auditUser(userData) {
 
 async function getRecentMessages(userData) {
   try {
+    console.log(`📱 Getting chats for ${userData.name}...`);
+    
+    // Get all chats first
     const response = await axios.get(
       `https://api.green-api.com/waInstance${userData.greenApi.instanceId}/getChats/${userData.greenApi.token}`
     );
-    return response.data || [];
+    
+    const allChats = response.data || [];
+    console.log(`📂 Found ${allChats.length} total chats`);
+    
+    // Filter to exclude group chats BUT include 2-person groups and important family groups
+    const individualChats = allChats.filter(chat => {
+      const isGroup = chat.id && chat.id.includes('@g.us');
+      
+      if (!isGroup) {
+        return true;  // Keep all individual chats
+      }
+      
+      // For group chats, include only small/family groups
+      const name = chat.name || '';
+      const isSmallFamilyGroup = 
+        name.includes('יונית') || 
+        name.includes('Yonit') || 
+        name.toLowerCase().includes('family') ||
+        name.includes('שחר') ||
+        chat.id.includes('972542181826') ||  // Yonit's specific chat
+        chat.id.includes('972546738221') ||  // Shahar's specific chat  
+        (chat.participantsCount && chat.participantsCount <= 3);  // Small groups only
+      
+      if (isSmallFamilyGroup) {
+        console.log(`   🏠 Including family/small group: ${name}`);
+        return true;
+      }
+      
+      return false;  // Exclude all other groups
+    });
+    
+    console.log(`👤 Filtered to ${individualChats.length} individual chats (excluding groups)`);
+    
+    // Get messages from individual chats only
+    const allMessages = [];
+    const now = Date.now();
+    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+    
+    // Prioritize known contacts and recent chats
+    const prioritizedChats = individualChats.sort((a, b) => {
+      // Prioritize chats with names (known contacts) over unknown numbers
+      const aHasName = (a.name && a.name !== 'Unknown') ? 1 : 0;
+      const bHasName = (b.name && b.name !== 'Unknown') ? 1 : 0;
+      
+      if (aHasName !== bHasName) return bHasName - aHasName;
+      
+      // Then sort by recent activity
+      const aTime = a.lastMessage?.timestamp || 0;
+      const bTime = b.lastMessage?.timestamp || 0;
+      return bTime - aTime;
+    });
+    
+    console.log(`🎯 Top prioritized individual chats:`);
+    prioritizedChats.slice(0, 10).forEach((chat, i) => {
+      console.log(`   ${i+1}. ${chat.name || 'Unknown'} (${chat.id.substring(0, 20)}...)`);
+    });
+    
+    for (const chat of prioritizedChats.slice(0, 15)) { // Limit to top 15 prioritized chats
+      try {
+        console.log(`📄 Getting messages from: ${chat.name || 'Unknown'} (${chat.id.substring(0, 15)}...)`);
+        
+        const historyResponse = await axios.post(
+          `https://api.green-api.com/waInstance${userData.greenApi.instanceId}/getChatHistory/${userData.greenApi.token}`,
+          {
+            chatId: chat.id,
+            count: 100  // Get last 100 messages from each chat to find older messages
+          }
+        );
+        
+        if (historyResponse.data && historyResponse.data.length > 0) {
+          // Filter messages to last 24 hours and format them
+          const recentMessages = historyResponse.data.filter(msg => {
+            const messageTime = msg.timestamp * 1000;
+            return messageTime >= twentyFourHoursAgo;
+          }).map(msg => ({
+            id: msg.idMessage || Date.now(),
+            text: msg.textMessage || '',
+            timestamp: msg.timestamp,
+            senderName: msg.senderName || userData.name,
+            senderId: msg.senderId || userData.phoneNumber,
+            chatId: chat.id,
+            chatName: chat.name
+          })).filter(msg => msg.text.trim().length > 0);
+          
+          allMessages.push(...recentMessages);
+          console.log(`   ✅ Added ${recentMessages.length} messages from last 24h`);
+        }
+        
+        // Longer delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+      } catch (chatError) {
+        if (chatError.response?.status === 429) {
+          console.log(`   ⚠️ Rate limited for ${chat.name || 'Unknown'}, skipping...`);
+        } else {
+          console.log(`   ❌ Error getting messages from ${chat.name || 'Unknown'}: ${chatError.message}`);
+        }
+      }
+    }
+    
+    // Sort by timestamp (newest first)
+    allMessages.sort((a, b) => b.timestamp - a.timestamp);
+    
+    console.log(`📋 Total messages collected: ${allMessages.length} from individual chats only`);
+    
+    return allMessages;
+    
   } catch (error) {
     console.log('Could not fetch messages:', error.message);
     return [];
@@ -151,15 +268,30 @@ async function getRelevantCalendarEvents(userData, detectedMeetings) {
       return response.data.items || [];
     }
     
-    // Get all unique dates from detected meetings
+    // Get all unique dates from detected meetings (enhanced with LLM data)
     const datesToCheck = new Set();
     for (const meeting of detectedMeetings) {
+      // Priority 1: Use LLM-extracted datetime if available
+      if (meeting.llmDateTime) {
+        try {
+          const llmDate = new Date(meeting.llmDateTime);
+          if (!isNaN(llmDate)) {
+            datesToCheck.add(llmDate.toDateString());
+            console.log(`📅 Using LLM date: ${llmDate.toDateString()} from "${meeting.extractedText.substring(0, 30)}..."`);
+            continue;
+          }
+        } catch (e) {
+          console.warn(`Could not parse LLM datetime: ${meeting.llmDateTime}`);
+        }
+      }
+      
+      // Priority 2: Use keyword-detected parsed dates
       if (meeting.parsedDates && meeting.parsedDates.length > 0) {
         meeting.parsedDates.forEach(date => {
           datesToCheck.add(date.toDateString());
         });
       } else {
-        // If no specific date, check today and tomorrow
+        // Priority 3: Fallback - check today and tomorrow
         const today = new Date();
         const tomorrow = new Date(today);
         tomorrow.setDate(today.getDate() + 1);
@@ -212,24 +344,61 @@ function analyzeConflictsAndMissing(detectedMeetings, calendarEvents) {
     let foundConflict = false;
     let foundMatch = false;
     
-    // Check each detected meeting against calendar events
+    // Check each detected meeting against calendar events (enhanced with LLM data)
     for (const event of calendarEvents) {
-      if (meeting.parsedDates && meeting.parsedDates.length > 0) {
-        for (const meetingDate of meeting.parsedDates) {
-          const eventStart = new Date(event.start.dateTime || event.start.date);
-          const meetingDateOnly = new Date(meetingDate.toDateString());
-          const eventDateOnly = new Date(eventStart.toDateString());
-          
-          // Check if it's the same day
-          if (meetingDateOnly.getTime() === eventDateOnly.getTime()) {
-            // Check for time conflicts
-            if (meeting.detectedTime && event.start.dateTime) {
+      const eventStart = new Date(event.start.dateTime || event.start.date);
+      const eventDateOnly = new Date(eventStart.toDateString());
+      
+      // Get meeting date (prioritize LLM-extracted datetime)
+      let meetingDates = [];
+      
+      if (meeting.llmDateTime) {
+        try {
+          const llmDate = new Date(meeting.llmDateTime);
+          if (!isNaN(llmDate)) {
+            meetingDates.push(llmDate);
+          }
+        } catch (e) {
+          console.warn(`Could not parse LLM datetime: ${meeting.llmDateTime}`);
+        }
+      }
+      
+      // Fallback to parsed dates from keyword detection
+      if (meetingDates.length === 0 && meeting.parsedDates && meeting.parsedDates.length > 0) {
+        meetingDates = meeting.parsedDates;
+      }
+      
+      for (const meetingDate of meetingDates) {
+        const meetingDateOnly = new Date(meetingDate.toDateString());
+        
+        // Check if it's the same day
+        if (meetingDateOnly.getTime() === eventDateOnly.getTime()) {
+            // Check for time conflicts (prioritize LLM-extracted time)
+            let meetingTimeForComparison = null;
+            
+            // Use LLM datetime if available and has time component
+            if (meeting.llmDateTime) {
+              try {
+                const llmDate = new Date(meeting.llmDateTime);
+                if (!isNaN(llmDate) && meeting.llmDateTime.includes(':')) {
+                  meetingTimeForComparison = llmDate.getHours() + ':' + String(llmDate.getMinutes()).padStart(2, '0');
+                }
+              } catch (e) {
+                // Fallback to detected time
+              }
+            }
+            
+            // Fallback to keyword-detected time
+            if (!meetingTimeForComparison && meeting.detectedTime) {
+              meetingTimeForComparison = meeting.detectedTime.toLowerCase();
+            }
+            
+            if (meetingTimeForComparison && event.start.dateTime) {
               const eventTime = eventStart.getHours() + ':' + String(eventStart.getMinutes()).padStart(2, '0');
-              const meetingTimeStr = meeting.detectedTime.toLowerCase();
               
               // Simple time conflict detection
-              if (meetingTimeStr.includes(eventTime) || 
-                  eventTime.includes(meetingTimeStr.replace(/[^\d:]/g, ''))) {
+              if (meetingTimeForComparison.includes(eventTime) || 
+                  eventTime.includes(meetingTimeForComparison.replace(/[^\d:]/g, ''))) {
                 foundMatch = true;
                 confirmedMeetings.push({
                   meeting: meeting,
@@ -254,16 +423,24 @@ function analyzeConflictsAndMissing(detectedMeetings, calendarEvents) {
                 reason: 'Date match, time unclear'
               });
             }
-          }
         }
       }
     }
     
     // If no match or conflict found, it might be missing from calendar
-    if (!foundMatch && !foundConflict && meeting.confidence > 0.4) {
+    // Use LLM confidence if available, otherwise fallback to keyword confidence
+    const effectiveConfidence = meeting.llmAnalysis ? 
+      meeting.llmAnalysis.confidence / 100 : 
+      meeting.confidence;
+      
+    if (!foundMatch && !foundConflict && effectiveConfidence > 0.6) {
+      const reason = meeting.llmAnalysis ? 
+        `Claude confirmed meeting (${meeting.llmAnalysis.confidence}%) not found in calendar` :
+        'High confidence meeting not found in calendar';
+        
       missingEvents.push({
         meeting: meeting,
-        reason: 'High confidence meeting not found in calendar'
+        reason: reason
       });
     }
   }
@@ -333,6 +510,73 @@ async function sendComprehensiveSummary(userData, auditData) {
   } catch (error) {
     console.log('Could not send summary:', error.message);
   }
+}
+
+async function enhanceWithLLMAnalysis(keywordDetections, allMessages, llmAnalyzer) {
+  const confirmedMeetings = [];
+  
+  for (const detection of keywordDetections) {
+    try {
+      // Get conversation context for this detection
+      const conversationContext = getConversationContext(detection, allMessages);
+      
+      // Analyze with Claude
+      const llmResult = await llmAnalyzer.analyzeConversation(detection, conversationContext);
+      
+      // Add LLM analysis to the detection
+      detection.llmAnalysis = llmResult;
+      
+      // Only include meetings that Claude confirms as valid
+      if (llmResult.isValidMeeting && llmResult.confidence > 50) {
+        // Enhance detection with LLM-extracted information
+        if (llmResult.extractedDateTime) {
+          detection.llmDateTime = llmResult.extractedDateTime;
+        }
+        if (llmResult.extractedLocation) {
+          detection.llmLocation = llmResult.extractedLocation;
+        }
+        if (llmResult.extractedParticipants) {
+          detection.llmParticipants = llmResult.extractedParticipants;
+        }
+        if (llmResult.meetingType) {
+          detection.llmMeetingType = llmResult.meetingType;
+        }
+        
+        confirmedMeetings.push(detection);
+        console.log(`✅ Claude confirmed: "${detection.extractedText.substring(0, 40)}..." (${llmResult.confidence}%)`);
+      } else {
+        console.log(`❌ Claude rejected: "${detection.extractedText.substring(0, 40)}..." - ${llmResult.reasoning}`);
+      }
+    } catch (error) {
+      console.error(`Error analyzing detection with LLM:`, error.message);
+      // On error, include the original detection (fallback)
+      confirmedMeetings.push(detection);
+    }
+  }
+  
+  return confirmedMeetings;
+}
+
+function getConversationContext(targetDetection, allMessages) {
+  // Find messages from the same chat
+  const chatMessages = allMessages.filter(msg => 
+    msg.chatId === targetDetection.chatId || 
+    msg.senderId === targetDetection.senderName ||
+    // Fallback: if no chatId, group by similar sender patterns
+    (!msg.chatId && !targetDetection.chatId)
+  );
+  
+  // Get messages around the target message time (±2 hours window)
+  const targetTime = targetDetection.timestamp;
+  const contextWindow = 2 * 60 * 60; // 2 hours in seconds
+  
+  const contextMessages = chatMessages.filter(msg => {
+    const msgTime = msg.timestamp || Date.now() / 1000;
+    return Math.abs(msgTime - targetTime) <= contextWindow;
+  });
+  
+  // Sort by timestamp and return
+  return contextMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 }
 
 // Run if called directly
