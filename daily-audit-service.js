@@ -15,11 +15,11 @@ app.use(express.urlencoded({ extended: true }));
 const recentMessages = new Map();
 const userConfigs = new Map();
 
-// Master Google OAuth2 client - Use Web client for OAuth flow
+// Master Google OAuth2 client - Use Desktop client (tokens were generated with this)
 const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_WEB_CLIENT_ID,
-  process.env.GOOGLE_WEB_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
+  process.env.GOOGLE_DESKTOP_CLIENT_ID,
+  process.env.GOOGLE_DESKTOP_CLIENT_SECRET,
+  'urn:ietf:wg:oauth:2.0:oob'
 );
 
 // ============================================================================
