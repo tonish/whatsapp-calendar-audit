@@ -16,7 +16,18 @@ async function runStandaloneAudit() {
   try {
     // Load user configurations
     const usersDir = path.join(__dirname, 'data', 'users');
+    
+    // Check if directory exists
+    try {
+      await fs.access(usersDir);
+      console.log(`📁 Users directory found: ${usersDir}`);
+    } catch (error) {
+      console.error(`❌ Users directory not found: ${usersDir}`);
+      throw error;
+    }
+    
     const userFiles = await fs.readdir(usersDir);
+    console.log(`📂 Found ${userFiles.length} files: ${userFiles.join(', ')}`);
     
     for (const file of userFiles) {
       if (!file.endsWith('.json')) continue;

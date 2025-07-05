@@ -46,4 +46,10 @@ jobs:
         echo "📄 Shahar preview: $(head -c 100 data/users/1d7c2a42-ae77-4f4c-969d-f43bde9408d9.json)"
         
     - name: Run daily audit
-      run: node run-audit.js
+      run: |
+        echo "🧪 Trying complex audit first..."
+        if ! node run-audit.js; then
+          echo "❌ Complex audit failed, trying simple version..."
+          echo "🚀 Running simple audit fallback..."
+          node run-audit-simple.js
+        fi
