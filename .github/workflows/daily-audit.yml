@@ -28,9 +28,17 @@ jobs:
       
     - name: Restore user data
       run: |
-        # Method 1: Direct JSON (cleaned)
+        # Method 1: Direct JSON (cleaned) - try this first
         echo '${{ secrets.SHAHAR_USER_DATA }}' | tr -d '\n\r' > data/users/1d7c2a42-ae77-4f4c-969d-f43bde9408d9.json
         echo '${{ secrets.YONIT_USER_DATA }}' | tr -d '\n\r' > data/users/a4139531-7b4b-42fd-9301-dd2cb9caaf88.json
+        
+        # Method 2: Base64 fallback (if secrets exist)
+        if [ ! -z '${{ secrets.SHAHAR_USER_DATA_BASE64 }}' ]; then
+          echo '${{ secrets.SHAHAR_USER_DATA_BASE64 }}' | base64 -d > data/users/1d7c2a42-ae77-4f4c-969d-f43bde9408d9.json
+        fi
+        if [ ! -z '${{ secrets.YONIT_USER_DATA_BASE64 }}' ]; then
+          echo '${{ secrets.YONIT_USER_DATA_BASE64 }}' | base64 -d > data/users/a4139531-7b4b-42fd-9301-dd2cb9caaf88.json
+        fi
         
         # Debug: Show file contents
         echo "📄 Shahar file size: $(wc -c < data/users/1d7c2a42-ae77-4f4c-969d-f43bde9408d9.json)"
